@@ -1,0 +1,2 @@
+# binance_exercise
+Binanceのデータ処理の練習リポジトリです
