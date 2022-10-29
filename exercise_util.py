@@ -6,6 +6,21 @@ import contextlib
 
 from tqdm.auto import tqdm
 
+target_symbols = {
+    'BTCUSDT': (2019, 9, 8),
+    'ETHUSDT': (2019, 11, 27),
+    'XRPUSDT': (2020, 1, 6),
+    'BNBUSDT': (2020, 2, 10),
+    'ADAUSDT': (2020, 1, 31),
+    'SOLUSDT': (2020, 9, 14),
+    'DOGEUSDT': (2020, 7, 10),
+    'MATICUSDT': (2020, 10, 22),
+    'AVAXUSDT': (2020, 9, 23),
+    '1000SHIBUSDT': (2021, 5, 10),
+    'ATOMUSDT': (2020, 2, 7),
+}
+
+
 # データ保存ディレクトリの中のデータファイル一覧を返すユーティリティ関数
 def identify_datafiles(datadir: str = None, datatype: str = None, symbol: str = None, interval: int = None, incomplete: bool = False):
     assert datadir is not None
@@ -19,8 +34,12 @@ def identify_datafiles(datadir: str = None, datatype: str = None, symbol: str = 
     
     if incomplete == True:
         _target_pattern = f'incomplete-{symbol}-{datatype}-*'
+        _result_list = [_ for _ in _p.glob(_target_pattern)]
+        _target_pattern = f'temp-{symbol}-{datatype}-*'
+        _result_list = _result_list + [_ for _ in _p.glob(_target_pattern)]
     else:
         _target_pattern = f'{symbol}-{datatype}-*'
+        _result_list = [_ for _ in _p.glob(_target_pattern)]
 
     return sorted([_ for _ in _p.glob(_target_pattern)])
 
