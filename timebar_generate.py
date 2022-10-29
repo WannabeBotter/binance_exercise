@@ -2,21 +2,13 @@ import pandas as pd
 import numpy as np
 import numpy.ma as ma
 from numpy.lib.stride_tricks import sliding_window_view
-
-import matplotlib.pyplot as plt
-import japanize_matplotlib
-
 from pathlib import Path
-
 import joblib
 import re
 import os
-
 import datetime
-
 import argparse
-
-from exercise_util import tqdm_joblib, identify_datafiles
+from exercise_util import tqdm_joblib, identify_datafiles, target_symbols
 
 datadir = 'data/binance'
 
@@ -170,7 +162,7 @@ def generate_timebar_files(datadir: str = None, symbol: str = None, interval: in
     _list_filenames = sorted([str(_) for _ in _list_incomplete_files])
     _num_rows = len(_list_filenames)
     with tqdm_joblib(total = _num_rows):
-        results = joblib.Parallel(n_jobs = -2, timeout = 60*60*24)([joblib.delayed(finish_incomplete_timebar_files)(_idx, _filename, interval) for _idx, _filename in enumerate(_list_filenames)])
+        results = joblib.Parallel(n_jobs = -1, timeout = 60*60*24)([joblib.delayed(finish_incomplete_timebar_files)(_idx, _filename, interval) for _idx, _filename in enumerate(_list_filenames)])
 
     # 処理開始後に全てのincompleteファイルを削除する
     _list_incomplete_files = identify_datafiles(datadir, 'timebar', _symbol, interval, incomplete = True)
@@ -180,11 +172,14 @@ def generate_timebar_files(datadir: str = None, symbol: str = None, interval: in
 # 引数処理とダウンロード関数の起動部分
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('symbol', help = 'ダウンロードする対象の銘柄 例:BTCUSDT')
+    parser.add_argument('--symbol', help = 'ダウンロードする対象の銘柄 例:BTCUSDT')
     parser.add_argument('interval', type = int, help = '生成するタイムバーの時間間隔 [秒] 例:60')
     args = parser.parse_args()
 
     symbol = args.symbol
     interval = args.interval
-    if len(symbol) > 0:
+    if symbol:
         generate_timebar_files(datadir, symbol, int(interval))
+    else:
+        for _symbol in target_symbols.keys():
+            generate_timebar_files(datadir, _symbol, int(interval))

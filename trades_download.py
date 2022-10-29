@@ -11,16 +11,19 @@ from io import BytesIO, StringIO
 from joblib import Parallel, delayed
 from retrying import retry
 import argparse
-from exercise_util import tqdm_joblib, identify_datafiles
+from exercise_util import tqdm_joblib, identify_datafiles, target_symbols
 
 # ファイル保存ディレクトリの中を見て、まだダウンロードしていないデータファイル名を返す関数
 def identify_not_yet_downloaded_dates(symbol: str = None, datadir: str = None) -> set:
     assert symbol is not None
     assert datadir is not None
-    
+
     _symbol = symbol.upper()
     _d_today = datetime.date.today()
     _d_cursor = datetime.date(year = 2019, month = 9, day = 8)
+    if symbol in target_symbols:
+        _initial_date = target_symbols[symbol]
+        _d_cursor = datetime.date(year = _initial_date[0], month = _initial_date[1], day = _initial_date[2])
     
     Path(f'{datadir}/trades/{_symbol}').mkdir(parents = True, exist_ok = True)
     
@@ -88,20 +91,34 @@ def download_trade_from_binance(symbol: str = None) -> None:
     _datadir = 'data/binance'    
     _symbol = symbol.upper()
 
+    # 処理開始前に全ての未完了ファイルを削除する
+    _list_incomplete_files = identify_datafiles(_datadir, 'trades', _symbol, incomplete = True)
+    for _incomplete_file in _list_incomplete_files:
+        _incomplete_file.unlink()
+
     _set_target_files = identify_not_yet_downloaded_dates(_symbol, _datadir)  
     _num_files = len(_set_target_files)
-    print(f'{_num_files}個の約定履歴ファイルをダウンロードしています')
+    print(f'{symbol}の約定履歴ファイルを{_num_files}個ダウンロードします')
     
     with tqdm_joblib(total = _num_files):
-        r = Parallel(n_jobs = 4, timeout = 60*60*24)([delayed(download_trade_zip)(_f, _datadir) for _f in _set_target_files])
+        r = Parallel(n_jobs = -1, timeout = 60*60*24)([delayed(download_trade_zip)(_f, _datadir) for _f in _set_target_files])
+
+    # 処理開始後に全ての未完了ファイルを削除する
+    _list_incomplete_files = identify_datafiles(_datadir, 'trades', _symbol, incomplete = True)
+    for _incomplete_file in _list_incomplete_files:
+        _incomplete_file.unlink()
+
     return
 
 # 引数処理とダウンロード関数の起動部分
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('symbol', help = 'ダウンロードする対象の銘柄 例:BTCUSDT')
+    parser.add_argument('--symbol', help = 'ダウンロードする対象の銘柄 例:BTCUSDT')
     args = parser.parse_args()
 
     symbol = args.symbol
-    if len(symbol) > 0:
+    if symbol:
         download_trade_from_binance(symbol)
+    else:
+        for _symbol in target_symbols.keys():
+            download_trade_from_binance(_symbol)
