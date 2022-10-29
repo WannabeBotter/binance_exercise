@@ -1,11 +1,7 @@
 import pandas as pd
-import numpy as np
-import numpy.ma as ma
-from numpy.lib.stride_tricks import sliding_window_view
 from pathlib import Path
 import joblib
 import re
-import os
 import datetime
 import argparse
 from exercise_util import tqdm_joblib, identify_datafiles, target_symbols
@@ -157,7 +153,6 @@ def generate_timebar_files(datadir: str = None, symbol: str = None, interval: in
         results = joblib.Parallel(n_jobs = -2, timeout = 60*60*24)([joblib.delayed(calc_timebar_from_trades)(_idx, _filename, interval) for _idx, _filename in enumerate(_list_filenames)])
     
     # Incompleteなファイルを完成させる
-    print(f'未完成の{symbol}の{interval}秒タイムバーファイルがある場合は、それらを完成させます')
     _list_incomplete_files = identify_datafiles(datadir, 'timebar', _symbol, interval, incomplete = True)
     _list_filenames = sorted([str(_) for _ in _list_incomplete_files])
     _num_rows = len(_list_filenames)
