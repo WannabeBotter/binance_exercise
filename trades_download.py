@@ -2,12 +2,11 @@ import pandas as pd
 import numpy as np
 import datetime
 import time
-import os
 from pathlib import Path
 import re
 import requests
 import zipfile
-from io import BytesIO, StringIO
+from io import BytesIO
 from joblib import Parallel, delayed
 from retrying import retry
 import argparse
