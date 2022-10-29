@@ -1,10 +1,9 @@
 import os
 from pathlib import Path
-
 import joblib
 import contextlib
-
 from tqdm.auto import tqdm
+import pandas as pd
 
 target_symbols = {
     'BTCUSDT': (2019, 9, 8),
@@ -63,3 +62,30 @@ def tqdm_joblib(total: int = None, **kwargs):
     finally:
         joblib.parallel.BatchCompletionCallBack = old_batch_callback
         pbar.close()
+
+# タイムバーファイルをロードしてすべて結合する関数
+def concat_timebar_files(symbol: str = None, interval: int = None):
+    assert symbol is not None
+    assert interval is not None
+
+    _p = Path(f'data/binance/timebar/{symbol}/{interval}')    
+    _list_trades_file = sorted(_p.glob(f'{symbol}-timebar-*'))
+    
+    def read_timebar(idx, filename):
+        _df = pd.read_pickle(filename)
+        return (idx, _df)
+    
+    with tqdm_joblib(total = len(_list_trades_file)):
+        results = joblib.Parallel(n_jobs = -2, timeout = 60*60*24)([joblib.delayed(read_timebar)(_idx, _filename) for _idx, _filename in enumerate(_list_trades_file)])
+
+    results.sort(key = lambda x: x[0])
+
+    _list_timebar_df = []
+    for _result in results:
+        _list_timebar_df.append(_result[1])
+
+    _df = pd.concat(_list_timebar_df, axis = 0)
+
+    # すべてが0の行を取り除く
+    _df = _df[(_df.T != 0).any()]
+    return _df
