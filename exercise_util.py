@@ -19,7 +19,6 @@ target_symbols = {
     'ATOMUSDT': (2020, 2, 7),
 }
 
-
 # データ保存ディレクトリの中のデータファイル一覧を返すユーティリティ関数
 def identify_datafiles(datadir: str = None, datatype: str = None, symbol: str = None, interval: int = None, incomplete: bool = False):
     assert datadir is not None
