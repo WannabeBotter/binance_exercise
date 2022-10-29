@@ -178,6 +178,11 @@ if __name__ == '__main__':
 
     symbol = args.symbol
     interval = args.interval
+
+    if 86400 % interval != 0:
+        print('interval は 86400秒 (1日) の約数を指定してください')
+        exit(0)
+         
     if symbol:
         generate_timebar_files(datadir, symbol, int(interval))
     else:
