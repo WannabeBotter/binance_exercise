@@ -92,12 +92,13 @@ def concat_timebar_files(symbol: str = None, interval: int = None):
     return _df
 
 # ADF検定を実施する関数
-def adf_stationary_test(target_series: pd.Series = None):
+def adf_stationary_test(target_series: pd.Series = None, print:bool = False):
     _result = adfuller(target_series)
     _series_output = pd.Series(_result[0:4], index = ['Test Statistic', 'p-value', '#Lags Used', 'Number of Observations Used'])
     for _k, _v in _result[4].items():
         _series_output[f'Critical Value ({_k})'] = _v
-    print(_series_output)
-    print(f'This series is stationary : {_series_output["Test Statistic"] < _series_output["Critical Value (1%)"]}')
+    if print == True:
+        print(_series_output)
+        print(f'This series is stationary : {_series_output["Test Statistic"] < _series_output["Critical Value (1%)"]}')
     return _series_output['Test Statistic'] < _series_output['Critical Value (1%)']
 
