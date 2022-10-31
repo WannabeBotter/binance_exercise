@@ -4,6 +4,8 @@ import joblib
 import contextlib
 from tqdm.auto import tqdm
 import pandas as pd
+import statsmodels
+from statsmodels.tsa.stattools import adfuller
 
 target_symbols = {
     'BTCUSDT': (2019, 9, 8),
@@ -88,3 +90,14 @@ def concat_timebar_files(symbol: str = None, interval: int = None):
     # すべてが0の行を取り除く
     _df = _df[(_df.T != 0).any()]
     return _df
+
+# ADF検定を実施する関数
+def adf_stationary_test(target_series: pd.Series = None):
+    _result = adfuller(target_series)
+    _series_output = pd.Series(_result[0:4], index = ['Test Statistic', 'p-value', '#Lags Used', 'Number of Observations Used'])
+    for _k, _v in _result[4].items():
+        _series_output[f'Critical Value ({_k})'] = _v
+    print(_series_output)
+    print(f'This series is stationary : {_series_output["Test Statistic"] < _series_output["Critical Value (1%)"]}')
+    return _series_output['Test Statistic'] < _series_output['Critical Value (1%)']
+
