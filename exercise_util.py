@@ -4,8 +4,9 @@ import joblib
 import contextlib
 from tqdm.auto import tqdm
 import pandas as pd
-import statsmodels
-from statsmodels.tsa.stattools import adfuller
+from arch.unitroot import ADF
+import datetime
+import re
 
 target_symbols = {
     'BTCUSDT': (2019, 9, 8),
@@ -33,7 +34,7 @@ def identify_datafiles(datadir: str = None, datatype: str = None, symbol: str = 
         _p = Path(f'{datadir}/{datatype}/{symbol}/{interval}')
     
     if incomplete == True:
-        _target_pattern = f'incomplete-{symbol}-{datatype}-*'
+        _target_pattern = f'incomplete-{symbol}-{datatype}-{interval}sec*'
         _result_list = [_ for _ in _p.glob(_target_pattern)]
         _target_pattern = f'temp-{symbol}-{datatype}-*'
         _result_list = _result_list + [_ for _ in _p.glob(_target_pattern)]
@@ -41,7 +42,7 @@ def identify_datafiles(datadir: str = None, datatype: str = None, symbol: str = 
         _target_pattern = f'{symbol}-{datatype}-*'
         _result_list = [_ for _ in _p.glob(_target_pattern)]
 
-    return sorted([_ for _ in _p.glob(_target_pattern)])
+    return sorted(_result_list)
 
 # joblibの並列処理のプログレスバーを表示するためのユーティリティ関数
 # https://blog.ysk.im/x/joblib-with-progress-bar
@@ -65,12 +66,30 @@ def tqdm_joblib(total: int = None, **kwargs):
         pbar.close()
 
 # タイムバーファイルをロードしてすべて結合する関数
-def concat_timebar_files(symbol: str = None, interval: int = None):
+def concat_timebar_files(symbol: str = None, interval: int = None, from_str:str = None):
     assert symbol is not None
     assert interval is not None
 
-    _p = Path(f'data/binance/timebar/{symbol}/{interval}')    
-    _list_trades_file = sorted(_p.glob(f'{symbol}-timebar-*'))
+    _d_today = datetime.date.today()
+    
+    if from_str is None:
+        _p = Path(f'data/binance/timebar/{symbol}/{interval}')
+        _list_trades_file = sorted(_p.glob(f'{symbol}-timebar-*'))
+    else:
+        _m = re.match('(\d{4})-(\d{2})-(\d{2})', from_str)
+        _year = int(_m.group(1))
+        _month = int(_m.group(2))
+        _day = int(_m.group(3))
+
+        _d_cursor = datetime.date(year = _year, month = _month, day = _day)
+    
+        _list_trades_file = []
+        while _d_cursor < _d_today:
+            _filename = f'data/binance/timebar/{symbol}/{interval}/{symbol}-timebar-{interval}sec-{_d_cursor.year:04}-{_d_cursor.month:02}-{_d_cursor.day:02}.pkl.gz'
+            if Path(_filename).exists() == True:
+                _list_trades_file.append(_filename)
+            _d_cursor = _d_cursor + datetime.timedelta(days = 1)
+        _list_trades_file = sorted(_list_trades_file)        
     
     def read_timebar(idx, filename):
         _df = pd.read_pickle(filename)
@@ -92,13 +111,6 @@ def concat_timebar_files(symbol: str = None, interval: int = None):
     return _df
 
 # ADF検定を実施する関数
-def adf_stationary_test(target_series: pd.Series = None, print:bool = False):
-    _result = adfuller(target_series)
-    _series_output = pd.Series(_result[0:4], index = ['Test Statistic', 'p-value', '#Lags Used', 'Number of Observations Used'])
-    for _k, _v in _result[4].items():
-        _series_output[f'Critical Value ({_k})'] = _v
-    if print == True:
-        print(_series_output)
-        print(f'This series is stationary : {_series_output["Test Statistic"] < _series_output["Critical Value (1%)"]}')
-    return _series_output['Test Statistic'] < _series_output['Critical Value (1%)']
-
+def adf_stationary_test(y: pd.Series = None):
+    _r = ADF(y, low_memory = len(y) > 10_000)
+    return _r.pvalue
