@@ -5,8 +5,12 @@ import contextlib
 from tqdm.auto import tqdm
 import pandas as pd
 from arch.unitroot import ADF
+from scipy.optimize import curve_fit
 import datetime
 import re
+import numpy as np
+import matplotlib.pyplot as plt
+import japanize_matplotlib
 
 target_symbols = {
     'BTCUSDT': (2019, 9, 8),
@@ -110,7 +114,75 @@ def concat_timebar_files(symbol: str = None, interval: int = None, from_str:str 
     _df = _df[(_df.T != 0).any()]
     return _df
 
+def load_fng_file():
+    return pd.read_pickle('data/alternativeme/FNG-index-86400sec-0000-00-00.pkl.gz')
+
 # ADF検定を実施する関数
 def adf_stationary_test(y: pd.Series = None):
     _r = ADF(y, low_memory = len(y) > 10_000)
     return _r.pvalue
+
+def show_correlation(series_x, series_y, title = None, xaxis_label = 'x', yaxis_label = 'y'):
+    _df = pd.DataFrame({'x': series_x, 'y': series_y}).dropna()
+    _corr = np.corrcoef(_df['x'], _df['y'])
+    _y_std = _df['y'].std()
+    _y_mean = _df['y'].mean()
+    _x_std = _df['x'].std()
+    _x_mean = _df['x'].mean()
+    
+    _std_range = 3
+    _y_max = _y_mean + _std_range * _y_std
+    _y_min = _y_mean - _std_range * _y_std
+    _x_max = _x_mean + _std_range * _x_std
+    _x_min = _x_mean - _std_range * _x_std
+    
+    fig, ax = plt.subplots(2, 2, sharex = 'col', sharey = 'row', gridspec_kw = {'width_ratios': [2, 0.5], 'height_ratios': [2, 0.5]}, figsize = (8, 8))
+    
+    # レンジごとの平均値を階段状にプロット
+    _x_sections = []
+    _y_means = []
+    for i in range(_std_range * 4 + 1):
+        __df = _df[(_df['x'] >= _x_min + 0.5 * _x_std * i) & (_df['x'] < _x_min + 0.5 * _x_std * (i + 1))]
+        _x_sections.append(_x_min + 0.5 * _x_std * i)
+        _y_means.append(__df['y'].mean())
+
+    # 近似直線のプロット
+    _ax = ax[0, 0]
+
+    def func(x, a, c):
+        return a * x + c
+    
+    _x_linspace = np.linspace(_x_min, _x_max, 50)
+    _popt, _pcov = curve_fit(func, _df['x'], _df['y'])
+    _ax.plot(_x_linspace, func(_x_linspace, *_popt), color = 'green', label = '$y = %s x {%s}$' % (f'{_popt[0]:.4f}', f'{_popt[1]:+.4f}'))
+
+    # 散布図
+    _ax.scatter(_df['x'], _df['y'], s = 1)
+    _ax.step(_x_sections, _y_means, 'red', where = 'post')
+    _ax.set_title(title)
+    _ax.set_xlabel(xaxis_label)
+    _ax.set_ylabel(yaxis_label)
+    _ax.set_xlim([_x_min, _x_max])
+    _ax.set_ylim([_y_min, _y_max])
+    _ax.set_xticks([_x_mean, _x_mean - 2 * _x_std, _x_mean - 4 * _x_std, _x_mean + 2 * _x_std, _x_mean + 4 * _x_std])
+    _ax.set_yticks([_y_mean, _y_mean - 2 * _y_std, _y_mean - 4 * _y_std, _y_mean + 2 * _y_std, _y_mean + 4 * _y_std])
+    _ax.grid(axis = 'both')
+    _ax.axvline(0, color = 'red', linestyle = 'dotted', linewidth = 1)
+    _ax.axhline(0, color = 'red', linestyle = 'dotted', linewidth = 1)
+    _ax.text(0.01, 0.99, f'IC = {_corr[0][1]:0.4f}', va = 'top', ha = 'left', transform = _ax.transAxes)
+    _ax.legend()
+
+    # ヒストグラム
+    _ax = ax[1, 0]
+    _ax.hist(_df['x'], bins = 50, range = [_x_min, _x_max])
+    _ax.grid(axis = 'both')
+    _ax.axvline(0, color='red', linestyle = 'dotted', linewidth = 1)
+    
+    _ax = ax[0, 1]
+    _ax.hist(_df['y'], bins = 50, orientation = 'horizontal', range = [_y_min, _y_max])
+    _ax.grid(axis = 'both')
+    _ax.axhline(0, color = 'red', linestyle = 'dotted', linewidth = 1)
+    
+    ax[1, 1].remove()
+    
+    fig.show()
