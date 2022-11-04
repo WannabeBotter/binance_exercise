@@ -149,12 +149,12 @@ def show_correlation(series_x, series_y, title = None, xaxis_label = 'x', yaxis_
     # 近似直線のプロット
     _ax = ax[0, 0]
 
-    def func(x, a, c):
-        return a * x + c
+    def func(x, a):
+        return a * x
     
     _x_linspace = np.linspace(_x_min, _x_max, 50)
     _popt, _pcov = curve_fit(func, _df['x'], _df['y'])
-    _ax.plot(_x_linspace, func(_x_linspace, *_popt), color = 'green', label = '$y = %s x {%s}$' % (f'{_popt[0]:.4f}', f'{_popt[1]:+.4f}'))
+    _ax.plot(_x_linspace, func(_x_linspace, *_popt), color = 'green', label = '$y = %s x$' % (f'{_popt[0]:.4f}'))
 
     # 散布図
     _ax.scatter(_df['x'], _df['y'], s = 1)
