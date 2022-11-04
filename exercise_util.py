@@ -122,7 +122,7 @@ def adf_stationary_test(y: pd.Series = None):
     _r = ADF(y, low_memory = len(y) > 10_000)
     return _r.pvalue
 
-def show_correlation(series_x, series_y, title = None, xaxis_label = 'x', yaxis_label = 'y'):
+def show_correlation(series_x, series_y, title = None, xaxis_label = 'x', yaxis_label = 'y', legend_loc = 'best'):
     _df = pd.DataFrame({'x': series_x, 'y': series_y}).dropna()
     _corr = np.corrcoef(_df['x'], _df['y'])
     _y_std = _df['y'].std()
@@ -170,7 +170,7 @@ def show_correlation(series_x, series_y, title = None, xaxis_label = 'x', yaxis_
     _ax.axvline(0, color = 'red', linestyle = 'dotted', linewidth = 1)
     _ax.axhline(0, color = 'red', linestyle = 'dotted', linewidth = 1)
     _ax.text(0.01, 0.99, f'IC = {_corr[0][1]:0.4f}', va = 'top', ha = 'left', transform = _ax.transAxes)
-    _ax.legend()
+    _ax.legend(loc = legend_loc)
 
     # ヒストグラム
     _ax = ax[1, 0]
