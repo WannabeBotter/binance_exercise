@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from pathlib import Path
 import joblib
 import re
@@ -8,6 +9,39 @@ from exercise_util import tqdm_joblib, identify_datafiles, target_symbols
 
 datadir = 'data/binance'
 
+def calc_weighted_moment(values, weights, n, sum_weights = None, weighted_mean = None, weighted_var = None):
+    assert n > 0
+    assert values.shape == weights.shape
+
+    if sum_weights is not None:
+        _sum_weights = sum_weights
+    else:
+        _sum_weights = np.sum(weights)
+
+    if _sum_weights == 0:
+        return np.nan
+
+    if n == 1:
+        return np.sum(weights * values) / _sum_weights
+
+    if weighted_mean is not None:
+        _weighted_mean = weighted_mean
+    else:
+        _weighted_mean = np.sum(weights * values) / _sum_weights
+
+    if n == 2:
+        return np.sum(weights * (values - _weighted_mean) ** 2) / _sum_weights
+
+    if weighted_var is not None:
+        _weighted_var = weighted_var
+    else:
+        _weighted_var = np.sum(weights * (values - _weighted_mean) ** 2) / _sum_weights
+    _weighted_std = np.sqrt(_weighted_var)
+
+    if n == 4:
+        return np.sum(weights * ((values - _weighted_mean) / _weighted_std) ** n) / _sum_weights - 3
+    return np.sum(weights * ((values - _weighted_mean) / _weighted_std) ** n) / _sum_weights
+        
 def calc_timebar_from_trades(idx, filename, interval):
     _interval_str = f'{interval}S'
 
@@ -22,21 +56,35 @@ def calc_timebar_from_trades(idx, filename, interval):
 
     _df = pd.read_pickle(filename).set_index('time', drop = True)
 
+    # リサンプルされたOHLCを作る
     _df_timebar = _df['price'].resample(_interval_str, closed = 'left').ohlc()
-    _df_timebar['buy_trade_count'] = _df.loc[_df['is_buyer_maker'] == False, 'is_buyer_maker'].resample(f'{interval}S').count().astype(int)
-    _df_timebar['sell_trade_count'] = _df.loc[_df['is_buyer_maker'] == True, 'is_buyer_maker'].resample(f'{interval}S').count().astype(int)
-    _df_timebar['quote_buy_volume'] = _df.loc[_df['is_buyer_maker'] == False, 'quote_qty'].resample(f'{interval}S').sum().astype(float)
-    _df_timebar['quote_sell_volume'] = _df.loc[_df['is_buyer_maker'] == True, 'quote_qty'].resample(f'{interval}S').sum().astype(float)
-    _df_timebar = _df_timebar.reindex(pd.date_range(_datetime_from, _datetime_to, freq = _interval_str, inclusive = 'both'))
 
+    # リサンプル対象がなかった時間について、直前の値などを使ってNaNを埋めていく
+    _df_timebar = _df_timebar.reindex(pd.date_range(_datetime_from, _datetime_to, freq = _interval_str, inclusive = 'both'))
     _df_timebar['close'] = _df_timebar['close'].fillna(method = 'ffill')
     _df_timebar['open'] = _df_timebar['open'].fillna(_df_timebar['close'])
     _df_timebar['high'] = _df_timebar['high'].fillna(_df_timebar['close'])
     _df_timebar['low'] = _df_timebar['low'].fillna(_df_timebar['close'])
+
+    def custom_resampler(x):
+        _total_quote_qty = x['quote_qty'].sum()
+        _buy_trade_count = len(x[x['is_buyer_maker'] == False].index)
+        _sell_trade_count = len(x) - _buy_trade_count
+        _buy_quote_qty = x.loc[x['is_buyer_maker'] == False, 'quote_qty'].sum().astype(float)
+        _sell_quote_qty = _total_quote_qty - _buy_quote_qty
+        
+        _weighted_price_mean = calc_weighted_moment(x['price'], x['quote_qty'], 1, sum_weights = _total_quote_qty)
+        _weighted_price_var = calc_weighted_moment(x['price'], x['quote_qty'], 2, sum_weights = _total_quote_qty, weighted_mean = _weighted_price_mean)
+        _weighted_price_std = np.sqrt(_weighted_price_var)
+        _weighted_price_skew = calc_weighted_moment(x['price'], x['quote_qty'], 3, sum_weights = _total_quote_qty, weighted_mean = _weighted_price_mean, weighted_var = _weighted_price_var)
+        _weighted_price_kurt = calc_weighted_moment(x['price'], x['quote_qty'], 4, sum_weights = _total_quote_qty, weighted_mean = _weighted_price_mean, weighted_var = _weighted_price_var)
+
+        return pd.Series([_buy_trade_count, _sell_trade_count, _buy_quote_qty, _sell_quote_qty, _weighted_price_mean, _weighted_price_var, _weighted_price_skew, _weighted_price_kurt, _weighted_price_std], ['buy_trade_count', 'sell_trade_count', 'buy_quote_qty', 'sell_quote_qty', 'vw_price_mean', 'vw_price_var', 'vw_price_skew', 'vw_price_kurt', 'vw_price_std'])
+
+    _df_statistics = _df.groupby(pd.Grouper(freq = _interval_str)).apply(custom_resampler)
+    _df_timebar = pd.concat([_df_timebar, _df_statistics], axis = 1)
     _df_timebar['buy_trade_count'] = _df_timebar['buy_trade_count'].fillna(0).astype(int)
     _df_timebar['sell_trade_count'] = _df_timebar['sell_trade_count'].fillna(0).astype(int)
-    _df_timebar['quote_buy_volume'] = _df_timebar['quote_buy_volume'].fillna(0).astype(float)
-    _df_timebar['quote_sell_volume'] = _df_timebar['quote_sell_volume'].fillna(0).astype(float)
     
     Path(f'{_datadir}/timebar/{_symbol}/{interval}').mkdir(parents = True, exist_ok = True)
 
