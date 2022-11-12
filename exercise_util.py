@@ -70,29 +70,40 @@ def tqdm_joblib(total: int = None, **kwargs):
         pbar.close()
 
 # タイムバーファイルをロードしてすべて結合する関数
-def concat_timebar_files(symbol: str = None, interval: int = None, from_str:str = None):
+def concat_timebar_files(symbol: str = None, interval: int = None, from_str:str = None, to_str:str = None):
     assert symbol is not None
     assert interval is not None
 
-    _d_today = datetime.date.today()
-    
-    if from_str is None:
+    if from_str is None and to_str is None:
         _p = Path(f'data/binance/timebar/{symbol}/{interval}')
         _list_trades_file = sorted(_p.glob(f'{symbol}-timebar-*'))
     else:
-        _m = re.match('(\d{4})-(\d{2})-(\d{2})', from_str)
-        _year = int(_m.group(1))
-        _month = int(_m.group(2))
-        _day = int(_m.group(3))
+        if from_str is None:
+            _dt_cursor = datetime.date(target_symbols[symbol][0], target_symbols[symbol][1], target_symbols[symbol][2])
+        else:
+            _m = re.match('(\d{4})-(\d{2})-(\d{2})', from_str)
+            _year = int(_m.group(1))
+            _month = int(_m.group(2))
+            _day = int(_m.group(3))
 
-        _d_cursor = datetime.date(year = _year, month = _month, day = _day)
+            _dt_cursor = datetime.date(year = _year, month = _month, day = _day)
+        
+        if to_str is None:
+            _dt_lastdate = datetime.date.today()
+        else:
+            _m = re.match('(\d{4})-(\d{2})-(\d{2})', to_str)
+            _year = int(_m.group(1))
+            _month = int(_m.group(2))
+            _day = int(_m.group(3))
+
+            _dt_lastdate = datetime.date(year = _year, month = _month, day = _day)
     
         _list_trades_file = []
-        while _d_cursor < _d_today:
-            _filename = f'data/binance/timebar/{symbol}/{interval}/{symbol}-timebar-{interval}sec-{_d_cursor.year:04}-{_d_cursor.month:02}-{_d_cursor.day:02}.pkl.gz'
+        while _dt_cursor <= _dt_lastdate:
+            _filename = f'data/binance/timebar/{symbol}/{interval}/{symbol}-timebar-{interval}sec-{_dt_cursor.year:04}-{_dt_cursor.month:02}-{_dt_cursor.day:02}.pkl.gz'
             if Path(_filename).exists() == True:
                 _list_trades_file.append(_filename)
-            _d_cursor = _d_cursor + datetime.timedelta(days = 1)
+            _dt_cursor = _dt_cursor + datetime.timedelta(days = 1)
         _list_trades_file = sorted(_list_trades_file)        
     
     def read_timebar(idx, filename):
